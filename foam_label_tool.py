@@ -15,6 +15,8 @@ class Constants:
     PPI_STRING = "PPI"
     RETICULATED_SIGNIFIER = "Reti"
     SIDES = ["1", "2", "3", "4", "all"]
+    IMG_HEIGHT = 720
+    IMG_WIDTH = 1280
 
 
 class Cube:
@@ -36,6 +38,7 @@ class Cube:
             4: Unterseite, also gegenüberliegend von 2.
             '''
             self.side = [side1, side2, side3, side4]
+            self.side_id = ["1", "2", "3", "4"]
         
         def overwrite_side(self, side_id, image_path):
             self.side[side_id - Constants.ENUMARATION_OFFSET] = image_path
@@ -148,10 +151,17 @@ class Foam_Label_Tool:
             for name in files:
                 #only use non-gamma images for now
                 #TODO: implement gamma images
-                if Constants.GAMMA not in name: 
-                    #make lists of paths and filenames
-                    image_path.append(os.path.join(root, name))
-                    image_name.append(name)
+                if not args["gamma"]:
+                    if Constants.GAMMA not in name: 
+                        #make lists of paths and filenames
+                        image_path.append(os.path.join(root, name))
+                        image_name.append(name)
+                else:
+                    if Constants.GAMMA in name: 
+                        #make lists of paths and filenames
+                        image_path.append(os.path.join(root, name))
+                        image_name.append(name)
+
         #make them alphabetically sorted
         image_name.sort()
         image_path.sort()
@@ -204,7 +214,35 @@ class Foam_Label_Tool:
         for selected in cubes_selection:
             print(selected.details())
 
+        '''
+        show pictures of selected cubes
+        '''
 
+        for cube in cubes_selection:
+            for [image, side_id] in zip(cube.view.side, cube.view.side_id):
+                
+                #https://www.life2coding.com/resize-opencv-window-according-screen-resolution/
+                img = cv.imread(image)
+            
+                #define the screen resulation
+                screen_res = Constants.IMG_HEIGHT, Constants.IMG_WIDTH
+                scale_width = screen_res[0] / img.shape[1]
+                scale_height = screen_res[1] / img.shape[0]
+                scale = min(scale_width, scale_height)
+            
+                #resized window width and height
+                window_width = int(img.shape[1] * scale)
+                window_height = int(img.shape[0] * scale)
+            
+                #cv2.WINDOW_NORMAL makes the output window resizealbe
+                cv.namedWindow('Resized Window', cv.WINDOW_NORMAL)
+            
+                #resize the window according to the screen resolution
+                cv.resizeWindow('Resized Window', window_width, window_height)
+            
+                cv.imshow('Resized Window', img)
+                cv.waitKey(0)
+                cv.destroyAllWindows()
 
 if __name__ == '__main__':
     labeltool = Foam_Label_Tool()
