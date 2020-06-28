@@ -234,13 +234,14 @@ class Foam_Label_Tool:
                 window_width = int(img.shape[1] * scale)
                 window_height = int(img.shape[0] * scale)
             
+                title = cube.details() + " side: " + side_id
                 #cv2.WINDOW_NORMAL makes the output window resizealbe
-                cv.namedWindow('Resized Window', cv.WINDOW_NORMAL)
+                cv.namedWindow(title, cv.WINDOW_NORMAL)
             
                 #resize the window according to the screen resolution
-                cv.resizeWindow('Resized Window', window_width, window_height)
+                cv.resizeWindow(title, window_width, window_height)
             
-                cv.imshow('Resized Window', img)
+                cv.imshow(title, img)
                 cv.waitKey(0)
                 cv.destroyAllWindows()
 
