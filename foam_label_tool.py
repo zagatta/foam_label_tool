@@ -6,6 +6,7 @@ import argparse
 from simple_term_menu import TerminalMenu
 import os
 from os import walk
+import copy
 
 class Constants:
     """Constants for this module."""
@@ -17,7 +18,7 @@ class Constants:
     SIDES = ["1", "2", "3", "4", "all"]
     IMG_HEIGHT = 720
     IMG_WIDTH = 1280
-    LINE_THICKNESS = 10
+    LINE_THICKNESS = 1
 
 class DrawOps:
     
@@ -30,7 +31,69 @@ class DrawOps:
                 mouseX,mouseY = x,y
                 cv.line(param[0], (x, y), (x+200, y+200), (0, 255, 0), thickness=Constants.LINE_THICKNESS)
                 cv.imshow(title ,img)
+
+    @staticmethod
+    def draw_knot(event,x,y,flags,param):
+            if event == cv.EVENT_LBUTTONDBLCLK:
+                title = param[0]
+                img = param[1]
+                knots = param[2]
+                center = param[3]
+                if len(knots[0].coordinates) < 3:
+                    print("adding new point for knot1 - " + str(x) + ":" + str(y))
+                    knot = knots[0]
+                else:
+                    print("adding new point for knot2 - " + str(x) + ":" + str(y))
+                    knot = knots[1]
+                knot.addPoint(x, y)
+                if not len(knot.coordinates) < 3:
+                    cv.line(img, (knot.coordinates[0][0], knot.coordinates[0][1]), (knot.coordinates[1][0], knot.coordinates[1][1]), (0, 255, 0), thickness=Constants.LINE_THICKNESS)
+                    cv.line(img, (knot.coordinates[1][0], knot.coordinates[1][1]), (knot.coordinates[2][0], knot.coordinates[2][1]), (0, 255, 0), thickness=Constants.LINE_THICKNESS)
+                    cv.line(img, (knot.coordinates[2][0], knot.coordinates[2][1]), (knot.coordinates[0][0], knot.coordinates[0][1]), (0, 255, 0), thickness=Constants.LINE_THICKNESS)
+                if not len(knots[0].coordinates) < 3 and not len(knots[1].coordinates) < 3:
+                    print("both knots drawn")
+                    center1 = ((knots[0].coordinates[0][0]+knots[0].coordinates[1][0]+knots[0].coordinates[2][0])//3, (knots[0].coordinates[0][1]+knots[0].coordinates[1][1]+knots[0].coordinates[2][1])//3) 
+                    center.append(center1)
+                    center2 = ((knots[1].coordinates[0][0]+knots[1].coordinates[1][0]+knots[1].coordinates[2][0])//3, (knots[1].coordinates[0][1]+knots[1].coordinates[1][1]+knots[1].coordinates[2][1])//3) 
+                    center.append(center2)
+                    cv.line(img, (center[0][0], center[0][1]), (center[1][0], center[1][1]), (0, 255, 0), thickness=Constants.LINE_THICKNESS)
+                cv.imshow(title ,img)
+    
+    @staticmethod
+    def measurement(event,x,y,flags,param):
+        title = param[0]
+        img = param[1]
+        # https://www.geeksforgeeks.org/copy-python-deep-copy-shallow-copy/
+        draw_img = copy.deepcopy(img) 
+        measurement = param[2]
+        measurement_spots = param[3]
+        if event == cv.EVENT_MOUSEMOVE:
+            '''
+            if len(measurement.distances) == 0:
+                
+            elif len(measurement.distances) == 1:
             
+            elif len(measurement.distances) == 2:
+            '''
+            cv.line(draw_img, (measurement_spots[0][0], measurement_spots[0][1]), (x, y), (0, 255, 0), thickness=Constants.LINE_THICKNESS)
+        if event == cv.EVENT_LBUTTONDBLCLK:
+            measurement.add_measurement()
+        cv.imshow(title , draw_img)
+
+class Measurement:
+    def __init__(self):
+        self.distances = []
+
+    def add_measurement(self, pixel):
+        self.distances.append(pixel)
+
+
+class Knot:
+    def __init__(self):
+        self.coordinates= []
+    
+    def addPoint(self, x, y):
+        self.coordinates.append([x, y])
 
 class Cube:
     '''
@@ -256,15 +319,29 @@ class Foam_Label_Tool:
 
                 #detect mouse click https://stackoverflow.com/questions/28327020/opencv-detect-mouse-position-clicking-over-a-picture
                 #hand another parameter to callback function: https://stackoverflow.com/questions/47114360/what-should-be-the-arguments-of-cv2-setmousecallback
-                cv.setMouseCallback(title, DrawOps.draw_line, [img, title])
+                #cv.setMouseCallback(title, DrawOps.draw_line, [img, title])
+
                 #detect if window is closed https://medium.com/@mh_yip/opencv-detect-whether-a-window-is-closed-or-close-by-press-x-button-ee51616f7088
                 while cv.getWindowProperty(title, cv.WND_PROP_VISIBLE) >= 1:
                     cv.imshow(title ,img)
                     k = cv.waitKey(20) & 0xFF
                     if k == 27:
+                        cv.destroyAllWindows()
                         break
-                    elif k == ord('a'):
-                        print(mouseX,mouseY)
+                    elif k == ord('k'):
+                        print("drawing knots")
+                        knots = [Knot(), Knot()]
+                        center = []
+                        cv.setMouseCallback(title, DrawOps.draw_knot, [title, img, knots, center])
+                    elif k == ord('m'):
+                        print("measuring thickness")
+                        measurement = Measurement()
+                        measurement_spots = []
+                        #add 10%, 50% and 90% measurement spots
+                        measurement_spots.append([int(center[0][0] - 0.1 * (center[0][0] - center[1][0])),int(center[0][1] - 0.1 * (center[0][1] - center[1][1]))])
+                        measurement_spots.append([int(center[0][0] - 0.5 * (center[0][0] - center[1][0])),int(center[0][1] - 0.5 * (center[0][1] - center[1][1]))])
+                        measurement_spots.append([int(center[0][0] - 0.9 * (center[0][0] - center[1][0])),int(center[0][1] - 0.9 * (center[0][1] - center[1][1]))])
+                        cv.setMouseCallback(title, DrawOps.measurement, [title, img, measurement, measurement_spots])
                     elif k == ord('n'):
                         cv.destroyAllWindows()
                         break
