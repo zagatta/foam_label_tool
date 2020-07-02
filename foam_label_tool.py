@@ -17,7 +17,20 @@ class Constants:
     SIDES = ["1", "2", "3", "4", "all"]
     IMG_HEIGHT = 720
     IMG_WIDTH = 1280
+    LINE_THICKNESS = 10
 
+class DrawOps:
+    
+    # draw a line https://stackoverflow.com/questions/18632276/how-to-draw-a-line-on-an-image-in-opencv
+    @staticmethod
+    def draw_line(event,x,y,flags,param):
+            global mouseX,mouseY
+            if event == cv.EVENT_LBUTTONDBLCLK:
+                print("click")
+                mouseX,mouseY = x,y
+                cv.line(param[0], (x, y), (x+200, y+200), (0, 255, 0), thickness=Constants.LINE_THICKNESS)
+                cv.imshow(title ,img)
+            
 
 class Cube:
     '''
@@ -220,7 +233,7 @@ class Foam_Label_Tool:
 
         for cube in cubes_selection:
             for [image, side_id] in zip(cube.view.side, cube.view.side_id):
-                
+
                 #https://www.life2coding.com/resize-opencv-window-according-screen-resolution/
                 img = cv.imread(image)
             
@@ -240,10 +253,22 @@ class Foam_Label_Tool:
             
                 #resize the window according to the screen resolution
                 cv.resizeWindow(title, window_width, window_height)
-            
-                cv.imshow(title, img)
-                cv.waitKey(0)
-                cv.destroyAllWindows()
+
+                #detect mouse click https://stackoverflow.com/questions/28327020/opencv-detect-mouse-position-clicking-over-a-picture
+                #hand another parameter to callback function: https://stackoverflow.com/questions/47114360/what-should-be-the-arguments-of-cv2-setmousecallback
+                cv.setMouseCallback(title, DrawOps.draw_line, [img, title])
+                #detect if window is closed https://medium.com/@mh_yip/opencv-detect-whether-a-window-is-closed-or-close-by-press-x-button-ee51616f7088
+                while cv.getWindowProperty(title, cv.WND_PROP_VISIBLE) >= 1:
+                    cv.imshow(title ,img)
+                    k = cv.waitKey(20) & 0xFF
+                    if k == 27:
+                        break
+                    elif k == ord('a'):
+                        print(mouseX,mouseY)
+                    elif k == ord('n'):
+                        cv.destroyAllWindows()
+                        break
+
 
 if __name__ == '__main__':
     labeltool = Foam_Label_Tool()
