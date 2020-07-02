@@ -7,6 +7,8 @@ from simple_term_menu import TerminalMenu
 import os
 from os import walk
 import copy
+from scipy import stats
+import math
 
 class Constants:
     """Constants for this module."""
@@ -18,7 +20,7 @@ class Constants:
     SIDES = ["1", "2", "3", "4", "all"]
     IMG_HEIGHT = 720
     IMG_WIDTH = 1280
-    LINE_THICKNESS = 1
+    LINE_THICKNESS = 2
 
 class DrawOps:
     
@@ -67,17 +69,19 @@ class DrawOps:
         draw_img = copy.deepcopy(img) 
         measurement = param[2]
         measurement_spots = param[3]
-        if event == cv.EVENT_MOUSEMOVE:
-            '''
-            if len(measurement.distances) == 0:
-                
-            elif len(measurement.distances) == 1:
-            
-            elif len(measurement.distances) == 2:
-            '''
-            cv.line(draw_img, (measurement_spots[0][0], measurement_spots[0][1]), (x, y), (0, 255, 0), thickness=Constants.LINE_THICKNESS)
-        if event == cv.EVENT_LBUTTONDBLCLK:
-            measurement.add_measurement()
+        if len(measurement.distances) < 3:
+            if event == cv.EVENT_MOUSEMOVE:
+                #currently using the spot with index+1 from how big our measured distances array is
+                spot = (measurement_spots[len(measurement.distances)-1][0], measurement_spots[len(measurement.distances)-1][1])
+                slope, intercept, r_value, p_value, std_err = stats.linregress(measurement_spots[0], measurement_spots[1])
+                dist = math.hypot(spot[0] - x, spot[1] - y)
+                dy = math.sqrt(dist**2/(slope**2+1))
+                dx = -slope*dy
+                x1 = int(spot[0] + dx)
+                y1 = int(spot[1] + dy)
+                cv.line(draw_img, (spot), (x1, y1), (0, 255, 0), thickness=Constants.LINE_THICKNESS)
+            if event == cv.EVENT_LBUTTONDBLCLK:
+                measurement.add_measurement([x,y])
         cv.imshow(title , draw_img)
 
 class Measurement:
