@@ -9,6 +9,7 @@ from os import walk
 import copy
 from scipy import stats
 import math
+import json
 
 # https://stackoverflow.com/questions/8664866/draw-perpendicular-line-to-a-line-in-opencv
 def getPerpCoord(aX, aY, bX, bY, length):
@@ -47,6 +48,7 @@ class Constants:
     GREEN = (0, 255, 0)
     BLUE = (255, 165, 0)
     ORANGE = (0, 89, 255)
+    JSON = ".json"
 
 class DrawOps:
     
@@ -96,7 +98,6 @@ class DrawOps:
         measurement_spots = param[4]
          # https://www.geeksforgeeks.org/copy-python-deep-copy-shallow-copy/
         draw_img = copy.deepcopy(img) 
-        print(len(measurement.distances))
         if len(measurement.distances) < 2:
             spot_index = 0
         elif len(measurement.distances) < 4:
@@ -119,9 +120,6 @@ class DrawOps:
                 cv.imshow(title , draw_img)
             if event == cv.EVENT_LBUTTONDBLCLK:
                 measurement.add_measurement(spot, (perpCoord[i1], perpCoord[i2]))
-        else:
-            print(measurement.distances)
-            print(measurement.getThickness())
 
     @staticmethod
     def show(img, title, measurement, knots, center):
@@ -140,7 +138,6 @@ class DrawOps:
             org_y = line[1][1]
             text = str(int(measurement.getPx(i)))
             org = (org_x, org_y)
-            print(org)
             cv.putText(img, text, org, cv.FONT_HERSHEY_SIMPLEX,  1, Constants.ORANGE, 1, cv.LINE_AA, False) 
             i += 1
         text = str(int(measurement.getThickness()))
@@ -170,15 +167,16 @@ class Measurement:
         '''
         dist10_1 = self.getPx(0)
         dist10_2 = self.getPx(1)
-        dist90_1 = self.getPx(2)
-        dist90_2 = self.getPx(3)
-        dist50_1 = self.getPx(4)
-        dist50_2 = self.getPx(5)
+        dist50_1 = self.getPx(2)
+        dist50_2 = self.getPx(3)
+        dist90_1 = self.getPx(4)
+        dist90_2 = self.getPx(5)
+
         result = (((dist10_1+dist10_2+dist90_1+dist90_2)/2) + (dist50_1+dist50_2))/2
         return result
     
     def getPx(self, index):
-        return math.hypot(self.distances[index][0][0] - self.distances[index][1][0], self.distances[index][0][1] - self.distances[index][1][1])
+        return round(math.hypot(self.distances[index][0][0] - self.distances[index][1][0], self.distances[index][0][1] - self.distances[index][1][1]), 0)
 
 
 
@@ -255,6 +253,38 @@ class Foam_Label_Tool:
     def __init__(self):
         self.name = "cool label tool"
 
+    def writeResult(self, knots, center, measurement, cube):
+        print(cube.path)
+        data = {}
+        data['measurement'] = []
+        data['measurement'].append({
+            'knot1': str(knots[0].coordinates),
+            'knot2': str(knots[1].coordinates),
+            'bridge1' : str(center[0]),
+            'bridge2' : str(center[1]),
+            'measurement10_1' : str(measurement.distances[0]),
+            'measurement10_2' : str(measurement.distances[1]),
+            'measurement50_1' : str(measurement.distances[2]),
+            'measurement50_2' : str(measurement.distances[3]),
+            'measurement90_1' : str(measurement.distances[4]),
+            'measurement90_2' : str(measurement.distances[5]),
+            'px10' : str(measurement.getPx(0)+measurement.getPx(1)),
+            'px50' : str(measurement.getPx(2)+measurement.getPx(3)),
+            'px90' : str(measurement.getPx(4)+measurement.getPx(5)),
+            'calculated_thickness' : str(measurement.getThickness())
+        })
+        json_name = cube.path + ".json"
+        if os.path.isfile(json_name):
+            with open(json_name) as outfile:
+                old = json.load(outfile)
+                temp = old['measurement']
+                data['measurement'].append(temp)
+        with open(json_name, 'w') as outfile:
+            json.dump(data, outfile)
+        
+            
+
+
     def walklevel(self, some_dir, level=0):
         '''
         mod of os.walk to only get x levels deep https://stackoverflow.com/questions/229186/os-walk-without-digging-into-directories-below
@@ -319,18 +349,19 @@ class Foam_Label_Tool:
         image_name = []
         for root, dirs, files in self.walklevel(foam_dir[choice_index]):
             for name in files:
-                #only use non-gamma images for now
-                #TODO: implement gamma images
-                if not args["gamma"]:
-                    if Constants.GAMMA not in name: 
-                        #make lists of paths and filenames
-                        image_path.append(os.path.join(root, name))
-                        image_name.append(name)
-                else:
-                    if Constants.GAMMA in name: 
-                        #make lists of paths and filenames
-                        image_path.append(os.path.join(root, name))
-                        image_name.append(name)
+                if not Constants.JSON in name:
+                    #only use non-gamma images for now
+                    #TODO: implement gamma images
+                    if not args["gamma"]:
+                        if Constants.GAMMA not in name: 
+                            #make lists of paths and filenames
+                            image_path.append(os.path.join(root, name))
+                            image_name.append(name)
+                    else:
+                        if Constants.GAMMA in name: 
+                            #make lists of paths and filenames
+                            image_path.append(os.path.join(root, name))
+                            image_name.append(name)
 
         #make them alphabetically sorted
         image_name.sort()
@@ -414,9 +445,8 @@ class Foam_Label_Tool:
                 #detect mouse click https://stackoverflow.com/questions/28327020/opencv-detect-mouse-position-clicking-over-a-picture
                 #hand another parameter to callback function: https://stackoverflow.com/questions/47114360/what-should-be-the-arguments-of-cv2-setmousecallback
                 #cv.setMouseCallback(title, DrawOps.draw_line, [img, title])
-
-                #detect if window is closed https://medium.com/@mh_yip/opencv-detect-whether-a-window-is-closed-or-close-by-press-x-button-ee51616f7088
                 cv.imshow(title ,img)
+                #detect if window is closed https://medium.com/@mh_yip/opencv-detect-whether-a-window-is-closed-or-close-by-press-x-button-ee51616f7088
                 while cv.getWindowProperty(title, cv.WND_PROP_VISIBLE) >= 1:
                     k = cv.waitKey(20) & 0xFF
                     if k == 27:
@@ -443,6 +473,8 @@ class Foam_Label_Tool:
                         #show and save
                         img = cv.imread(image)
                         DrawOps.show(img, title, measurement, knots, center)
+                        #save
+                        self.writeResult(knots, center, measurement, cube)
                     elif k == ord('n'):
                         cv.destroyAllWindows()
                         break
