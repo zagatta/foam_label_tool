@@ -10,6 +10,28 @@ import copy
 from scipy import stats
 import math
 
+# https://stackoverflow.com/questions/8664866/draw-perpendicular-line-to-a-line-in-opencv
+def getPerpCoord(aX, aY, bX, bY, length):
+    '''
+    c and d will be placed perpendicular to b
+    '''
+    vX = bX-aX
+    vY = bY-aY
+    #print(str(vX)+" "+str(vY))
+    if(vX == 0 or vY == 0):
+        return 0, 0, 0, 0
+    mag = math.sqrt(vX*vX + vY*vY)
+    vX = vX / mag
+    vY = vY / mag
+    temp = vX
+    vX = 0-vY
+    vY = temp
+    cX = bX + vX * length
+    cY = bY + vY * length
+    dX = bX - vX * length
+    dY = bY - vY * length
+    return int(cX), int(cY), int(dX), int(dY)
+
 class Constants:
     """Constants for this module."""
     SEPARATOR = "_"
@@ -20,7 +42,11 @@ class Constants:
     SIDES = ["1", "2", "3", "4", "all"]
     IMG_HEIGHT = 720
     IMG_WIDTH = 1280
-    LINE_THICKNESS = 2
+    LINE_THICKNESS_BIG = 2
+    LINE_THICKNESS_THIN = 1
+    GREEN = (0, 255, 0)
+    BLUE = (255, 165, 0)
+    ORANGE = (0, 89, 255)
 
 class DrawOps:
     
@@ -31,7 +57,7 @@ class DrawOps:
             if event == cv.EVENT_LBUTTONDBLCLK:
                 print("click")
                 mouseX,mouseY = x,y
-                cv.line(param[0], (x, y), (x+200, y+200), (0, 255, 0), thickness=Constants.LINE_THICKNESS)
+                cv.line(param[0], (x, y), (x+200, y+200), (0, 255, 0), thickness=Constants.LINE_THICKNESS_BIG)
                 cv.imshow(title ,img)
 
     @staticmethod
@@ -49,47 +75,111 @@ class DrawOps:
                     knot = knots[1]
                 knot.addPoint(x, y)
                 if not len(knot.coordinates) < 3:
-                    cv.line(img, (knot.coordinates[0][0], knot.coordinates[0][1]), (knot.coordinates[1][0], knot.coordinates[1][1]), (0, 255, 0), thickness=Constants.LINE_THICKNESS)
-                    cv.line(img, (knot.coordinates[1][0], knot.coordinates[1][1]), (knot.coordinates[2][0], knot.coordinates[2][1]), (0, 255, 0), thickness=Constants.LINE_THICKNESS)
-                    cv.line(img, (knot.coordinates[2][0], knot.coordinates[2][1]), (knot.coordinates[0][0], knot.coordinates[0][1]), (0, 255, 0), thickness=Constants.LINE_THICKNESS)
+                    cv.line(img, (knot.coordinates[0][0], knot.coordinates[0][1]), (knot.coordinates[1][0], knot.coordinates[1][1]), (0, 255, 0), thickness=Constants.LINE_THICKNESS_THIN)
+                    cv.line(img, (knot.coordinates[1][0], knot.coordinates[1][1]), (knot.coordinates[2][0], knot.coordinates[2][1]), (0, 255, 0), thickness=Constants.LINE_THICKNESS_THIN)
+                    cv.line(img, (knot.coordinates[2][0], knot.coordinates[2][1]), (knot.coordinates[0][0], knot.coordinates[0][1]), (0, 255, 0), thickness=Constants.LINE_THICKNESS_THIN)
                 if not len(knots[0].coordinates) < 3 and not len(knots[1].coordinates) < 3:
                     print("both knots drawn")
                     center1 = ((knots[0].coordinates[0][0]+knots[0].coordinates[1][0]+knots[0].coordinates[2][0])//3, (knots[0].coordinates[0][1]+knots[0].coordinates[1][1]+knots[0].coordinates[2][1])//3) 
                     center.append(center1)
                     center2 = ((knots[1].coordinates[0][0]+knots[1].coordinates[1][0]+knots[1].coordinates[2][0])//3, (knots[1].coordinates[0][1]+knots[1].coordinates[1][1]+knots[1].coordinates[2][1])//3) 
                     center.append(center2)
-                    cv.line(img, (center[0][0], center[0][1]), (center[1][0], center[1][1]), (0, 255, 0), thickness=Constants.LINE_THICKNESS)
+                    cv.line(img, (center[0][0], center[0][1]), (center[1][0], center[1][1]), (0, 255, 0), thickness=Constants.LINE_THICKNESS_THIN)
                 cv.imshow(title ,img)
     
     @staticmethod
     def measurement(event,x,y,flags,param):
         title = param[0]
         img = param[1]
-        # https://www.geeksforgeeks.org/copy-python-deep-copy-shallow-copy/
-        draw_img = copy.deepcopy(img) 
         measurement = param[2]
-        measurement_spots = param[3]
-        if len(measurement.distances) < 3:
+        center = param[3]
+        measurement_spots = param[4]
+         # https://www.geeksforgeeks.org/copy-python-deep-copy-shallow-copy/
+        draw_img = copy.deepcopy(img) 
+        print(len(measurement.distances))
+        if len(measurement.distances) < 2:
+            spot_index = 0
+        elif len(measurement.distances) < 4:
+            spot_index = 1
+        else:
+            spot_index = 2
+        if len(measurement.distances) < 6:
+            #currently using the spot with index+1 from how big our measured distances array is
+            spot = (measurement_spots[spot_index][0], measurement_spots[spot_index][1])
+            dist = math.hypot(spot[0] - x, spot[1] - y)
+            perpCoord = getPerpCoord(center[0][0], center[0][1], measurement_spots[spot_index][0], measurement_spots[spot_index][1], dist)
+            if(len(measurement.distances) % 2) == 0:
+                #gerade
+                (i1, i2) = (0, 1)
+            else:
+                #ungerade
+                (i1, i2) = (2, 3)
             if event == cv.EVENT_MOUSEMOVE:
-                #currently using the spot with index+1 from how big our measured distances array is
-                spot = (measurement_spots[len(measurement.distances)-1][0], measurement_spots[len(measurement.distances)-1][1])
-                slope, intercept, r_value, p_value, std_err = stats.linregress(measurement_spots[0], measurement_spots[1])
-                dist = math.hypot(spot[0] - x, spot[1] - y)
-                dy = math.sqrt(dist**2/(slope**2+1))
-                dx = -slope*dy
-                x1 = int(spot[0] + dx)
-                y1 = int(spot[1] + dy)
-                cv.line(draw_img, (spot), (x1, y1), (0, 255, 0), thickness=Constants.LINE_THICKNESS)
+                cv.line(draw_img, (spot), (perpCoord[i1], perpCoord[i2]), (100, 100, 0), thickness=Constants.LINE_THICKNESS_THIN)
+                cv.imshow(title , draw_img)
             if event == cv.EVENT_LBUTTONDBLCLK:
-                measurement.add_measurement([x,y])
-        cv.imshow(title , draw_img)
+                measurement.add_measurement(spot, (perpCoord[i1], perpCoord[i2]))
+        else:
+            print(measurement.distances)
+            print(measurement.getThickness())
+
+    @staticmethod
+    def show(img, title, measurement, knots, center):
+        for knot in knots:
+            cv.line(img, (knot.coordinates[0][0], knot.coordinates[0][1]), (knot.coordinates[1][0], knot.coordinates[1][1]), Constants.GREEN, thickness=Constants.LINE_THICKNESS_THIN)
+            cv.line(img, (knot.coordinates[1][0], knot.coordinates[1][1]), (knot.coordinates[2][0], knot.coordinates[2][1]), Constants.GREEN, thickness=Constants.LINE_THICKNESS_THIN)
+            cv.line(img, (knot.coordinates[2][0], knot.coordinates[2][1]), (knot.coordinates[0][0], knot.coordinates[0][1]), Constants.GREEN, thickness=Constants.LINE_THICKNESS_THIN)
+        #knot-center-line
+        cv.line(img, center[0], center[1], Constants.BLUE, thickness=Constants.LINE_THICKNESS_THIN)
+        #measurements 
+        i = 0
+        for line in measurement.distances:
+            cv.line(img, (line[0][0], line[0][1]), (line[1][0], line[1][1]), Constants.ORANGE, thickness=Constants.LINE_THICKNESS_THIN)
+            # https://www.geeksforgeeks.org/python-opencv-cv2-puttext-method/
+            org_x = line[1][0] 
+            org_y = line[1][1]
+            text = str(int(measurement.getPx(i)))
+            org = (org_x, org_y)
+            print(org)
+            cv.putText(img, text, org, cv.FONT_HERSHEY_SIMPLEX,  1, Constants.ORANGE, 1, cv.LINE_AA, False) 
+            i += 1
+        text = str(int(measurement.getThickness()))
+        org = (center[0])
+        cv.putText(img, text, org, cv.FONT_HERSHEY_SIMPLEX,  1, Constants.BLUE, 1, cv.LINE_AA, False) 
+        cv.imshow(title , img)
+        
+    
+        
 
 class Measurement:
     def __init__(self):
         self.distances = []
 
-    def add_measurement(self, pixel):
-        self.distances.append(pixel)
+    def add_measurement(self, start, end):
+        self.distances.append([start, end])
+
+    def getThickness(self):
+        #dist = math.hypot(x2-x1, y2-y1)
+        '''
+        dist10_1 = math.hypot(self.distances[0][0][0] - self.distances[0][1][0], self.distances[0][0][1] - self.distances[0][1][1])
+        dist10_2 = math.hypot(self.distances[1][0][0] - self.distances[1][1][0], self.distances[1][0][1] - self.distances[1][1][1])
+        dist90_1 = math.hypot(self.distances[2][0][0] - self.distances[2][1][0], self.distances[2][0][1] - self.distances[2][1][1])
+        dist90_2 = math.hypot(self.distances[3][0][0] - self.distances[3][1][0], self.distances[3][0][1] - self.distances[3][1][1])
+        dist50_1 = math.hypot(self.distances[4][0][0] - self.distances[4][1][0], self.distances[4][0][1] - self.distances[4][1][1])
+        dist50_2 = math.hypot(self.distances[5][0][0] - self.distances[5][1][0], self.distances[5][0][1] - self.distances[5][1][1])
+        '''
+        dist10_1 = self.getPx(0)
+        dist10_2 = self.getPx(1)
+        dist90_1 = self.getPx(2)
+        dist90_2 = self.getPx(3)
+        dist50_1 = self.getPx(4)
+        dist50_2 = self.getPx(5)
+        result = (((dist10_1+dist10_2+dist90_1+dist90_2)/2) + (dist50_1+dist50_2))/2
+        return result
+    
+    def getPx(self, index):
+        return math.hypot(self.distances[index][0][0] - self.distances[index][1][0], self.distances[index][0][1] - self.distances[index][1][1])
+
 
 
 class Knot:
@@ -326,8 +416,8 @@ class Foam_Label_Tool:
                 #cv.setMouseCallback(title, DrawOps.draw_line, [img, title])
 
                 #detect if window is closed https://medium.com/@mh_yip/opencv-detect-whether-a-window-is-closed-or-close-by-press-x-button-ee51616f7088
+                cv.imshow(title ,img)
                 while cv.getWindowProperty(title, cv.WND_PROP_VISIBLE) >= 1:
-                    cv.imshow(title ,img)
                     k = cv.waitKey(20) & 0xFF
                     if k == 27:
                         cv.destroyAllWindows()
@@ -345,7 +435,14 @@ class Foam_Label_Tool:
                         measurement_spots.append([int(center[0][0] - 0.1 * (center[0][0] - center[1][0])),int(center[0][1] - 0.1 * (center[0][1] - center[1][1]))])
                         measurement_spots.append([int(center[0][0] - 0.5 * (center[0][0] - center[1][0])),int(center[0][1] - 0.5 * (center[0][1] - center[1][1]))])
                         measurement_spots.append([int(center[0][0] - 0.9 * (center[0][0] - center[1][0])),int(center[0][1] - 0.9 * (center[0][1] - center[1][1]))])
-                        cv.setMouseCallback(title, DrawOps.measurement, [title, img, measurement, measurement_spots])
+
+                        #backup img
+                        img_bk = copy.deepcopy(img)
+                        cv.setMouseCallback(title, DrawOps.measurement, [title, img, measurement, center, measurement_spots, img_bk])
+                    elif k == ord('s'):
+                        #show and save
+                        img = cv.imread(image)
+                        DrawOps.show(img, title, measurement, knots, center)
                     elif k == ord('n'):
                         cv.destroyAllWindows()
                         break
