@@ -9,7 +9,8 @@ from os import walk
 import copy
 from scipy import stats
 import math
-import json
+import csv
+from datetime import datetime
 
 # https://stackoverflow.com/questions/8664866/draw-perpendicular-line-to-a-line-in-opencv
 def getPerpCoord(aX, aY, bX, bY, length):
@@ -49,6 +50,10 @@ class Constants:
     BLUE = (255, 165, 0)
     ORANGE = (0, 89, 255)
     JSON = ".json"
+    PATH_SEPARATOR = "/"
+    IMAGE_STR = "image_"
+    EXPORT_FIELDS = ['batch', 'x', 'y', 'reticulated', 'thickness']
+    RESULT_CSV = "result.csv"
 
 class DrawOps:
     
@@ -207,9 +212,16 @@ class Cube:
             '''
             self.side = [side1, side2, side3, side4]
             self.side_id = ["1", "2", "3", "4"]
+            self.side_json = ["", "", "", ""]
         
         def overwrite_side(self, side_id, image_path):
             self.side[side_id - Constants.ENUMARATION_OFFSET] = image_path
+
+        def add_side_json(self, json_path, json_id):
+            json_index = self.side_id.index(str(json_id))
+            self.side_json[json_index] = json_path
+
+            
 
 
     def __init__(self, cube_x, cube_y, cube_path, cube_batch, ppi, reticulated):
@@ -230,6 +242,9 @@ class Cube:
             self.view = self.Cube_View()
         #OVERWRITE image path
         self.view.overwrite_side(side_id, image_path)
+    
+    def add_json(self, json_path, json_id):
+        self.view.add_side_json(json_path, json_id)
 
     '''
     define how this class is printed
@@ -278,7 +293,8 @@ class Foam_Label_Tool:
             'px90' : str(measurement.getPx(4)+measurement.getPx(5)),
             'calculated_thickness' : str(measurement.getThickness())
         })
-        json_name = cube.path + "/image_" + self.twoDigits(cube.x) + "_" + self.twoDigits(cube.y) + "_" + side_id + ".json"
+        json_name = (cube.path + Constants.PATH_SEPARATOR + Constants.IMAGE_STR + self.twoDigits(cube.x) + 
+            Constants.SEPARATOR + self.twoDigits(cube.y) + Constants.SEPARATOR + side_id + Constants.JSON)
         if os.path.isfile(json_name):
             with open(json_name) as outfile:
                 old = json.load(outfile)
@@ -312,6 +328,7 @@ class Foam_Label_Tool:
         ap = argparse.ArgumentParser()
         ap.add_argument("-d", "--dataset", default="/home/jonaszagatta/gitprojects/datasets/foam/", help="path to input dataset (folder) with subfolders for all foam batches")
         ap.add_argument("-g", "--gamma", type=bool, default=False, help="do you want to use the gamma images?")
+        ap.add_argument("-e", "--export", type=bool, default=False, help="export json results instead of labeling?")
         
         # TODO: Delete
         ap.add_argument("-j", "--json", type=bool, default=False, help="Do you only want to debug the json saving?")
@@ -329,7 +346,6 @@ class Foam_Label_Tool:
             for name in dirs:
                 foam_dir.append(os.path.join(root, name))
                 foam_name.append(name)
-
 
         '''
         show menu to select batch 
@@ -360,7 +376,7 @@ class Foam_Label_Tool:
         image_name = []
         for root, dirs, files in self.walklevel(foam_dir[choice_index]):
             for name in files:
-                if not Constants.JSON in name:
+                if (not Constants.JSON in name) and (not Constants.RESULT_CSV in name):
                     #only use non-gamma images for now
                     #TODO: implement gamma images
                     if not args["gamma"]:
@@ -382,8 +398,10 @@ class Foam_Label_Tool:
         #put images in cubes
         # https://stackoverflow.com/questions/1663807/how-to-iterate-through-two-lists-in-parallel
         for [name, path] in zip(image_name, image_path):
+            '''
             print("name: " + name)
             print("path: " + path)
+            '''
             splitstring = name.split(Constants.SEPARATOR)
             x = int(splitstring[1])
             y = int(splitstring[2])
@@ -404,125 +422,170 @@ class Foam_Label_Tool:
                 cubes.append(new_cube)
             #once we're here cube does definitely exists -> add side to it
             new_cube.add_image_to_view(path, side)
-        
-        '''
-        give user cubes to select from
-        '''
-        cube_names = []
-        for cube in cubes:
-            cube_names.append(str(cube))
-        cube_names.append("all")
-        print("which cube do you want?")
-        terminal_menu = TerminalMenu(cube_names)
-        cube_choice_index = terminal_menu.show()
+            
+            # this is really dirty because it loops through all 4 possible jsons per cube, making it 4x the call, but it should still work and idc
+            for side_id in new_cube.view.side_id:
+                json_name = (new_cube.path + Constants.PATH_SEPARATOR + Constants.IMAGE_STR + self.twoDigits(new_cube.x) + 
+                    Constants.SEPARATOR + self.twoDigits(new_cube.y) + Constants.SEPARATOR + side_id + Constants.JSON)
+                if os.path.isfile(json_name):
+                    new_cube.view.add_side_json(json_name, side_id)
 
-        cubes_selection = []
-        if cube_choice_index > len(cubes) - 1:
-            #selected "all"
+        if args["export"]:
+            # run export only
+            print("export")
             for cube in cubes:
-                cubes_selection.append(cube)
+                #calculate thickness
+                thickness = 0.0
+                thickness_measurements = 0
+                for json_name in cube.view.side_json:
+                    if os.path.isfile(json_name):
+                        with open(json_name) as outfile:
+                            old = json.load(outfile)
+                            temp = old['measurement']
+                            for item in temp:
+                                thickness += float(item['calculated_thickness'])
+                                thickness_measurements += 1
+                if thickness_measurements > 0 and thickness > 0:
+                    final_thickness = thickness / thickness_measurements
+
+                    # datetime object containing current date and time
+                    now = datetime.now()
+                    # dd-mm-YY_H:M:S
+                    dt_string = now.strftime("%d-%m-%Y_%H:%M:%S")
+                    csv_name = foam_dir[choice_index] + Constants.PATH_SEPARATOR + dt_string + Constants.SEPARATOR + Constants.RESULT_CSV
+                    if not os.path.isfile(csv_name):
+                        with open(csv_name, mode='w') as csv_file:
+                            writer = csv.DictWriter(csv_file, fieldnames=Constants.EXPORT_FIELDS)
+                            writer.writeheader()
+                            csv_file.close()
+                    with open(csv_name, mode='a') as csv_file:
+                        # ['batch', 'x', 'y', 'reticulated', 'thickness']
+                        writer = csv.DictWriter(csv_file, fieldnames=Constants.EXPORT_FIELDS)
+                        writer.writerow({Constants.EXPORT_FIELDS[0]: cube.batch, Constants.EXPORT_FIELDS[1]: str(cube.x),
+                            Constants.EXPORT_FIELDS[2]: str(cube.y), Constants.EXPORT_FIELDS[3]: cube.reticulated, Constants.EXPORT_FIELDS[4]: str(final_thickness)})
+
+        
         else:
-            cubes_selection.append(cubes[cube_choice_index])
+            # go to labeling
+            '''
+            give user cubes to select from
+            '''
+            cube_names = []
+            for cube in cubes:
+                cube_names.append(str(cube))
+            cube_names.append("all")
+            print("which cube do you want?")
+            terminal_menu = TerminalMenu(cube_names)
+            cube_choice_index = terminal_menu.show()
 
-        print("you selected the following cubes for labeling")
-        for selected in cubes_selection:
-            print(selected.details())
+            cubes_selection = []
+            if cube_choice_index > len(cubes) - 1:
+                #selected "all"
+                for cube in cubes:
+                    cubes_selection.append(cube)
+            else:
+                cubes_selection.append(cubes[cube_choice_index])
 
-        '''
-        show pictures of selected cubes
-        '''
+            print("you selected the following cubes for labeling")
+            for selected in cubes_selection:
+                print(selected.details())
 
-        for cube in cubes_selection:
-            for [image, side_id] in zip(cube.view.side, cube.view.side_id):
 
-                # TODO: delete
-                if args["json"]:
-                    knots = [Knot(), Knot()]
-                    center = []
-                    measurement = Measurement()
-                    # fake knots
-                    # "knot1": "[[710, 769], [697, 805], [739, 801]]", "knot2": "[[777, 803], [804, 780], [798, 827]]"
-                    knots[0].addPoint(710, 769)
-                    knots[0].addPoint(697, 805)
-                    knots[0].addPoint(739, 801)
-                    knots[1].addPoint(777, 803)
-                    knots[1].addPoint(804, 780)
-                    knots[1].addPoint(798, 827)
-                    # fake center
-                    center1 = ((knots[0].coordinates[0][0]+knots[0].coordinates[1][0]+knots[0].coordinates[2][0])//3, (knots[0].coordinates[0][1]+knots[0].coordinates[1][1]+knots[0].coordinates[2][1])//3) 
-                    center.append(center1)
-                    center2 = ((knots[1].coordinates[0][0]+knots[1].coordinates[1][0]+knots[1].coordinates[2][0])//3, (knots[1].coordinates[0][1]+knots[1].coordinates[1][1]+knots[1].coordinates[2][1])//3) 
-                    center.append(center2)
-                    
-                    # fake measurement
-                    # "measurement10_1": "[(761, 792), (763, 814)]", "measurement10_2": "[(761, 792), (759, 775)]", "measurement50_1": "[(801, 791), (801, 807)]", "measurement50_2": "[(801, 791), (800, 775)]", "measurement90_1": "[(841, 789), (841, 808)]", "measurement90_2": "[(841, 789), (839, 757)]"
-                    measurement.add_measurement((761, 792), (763, 814))
-                    measurement.add_measurement((761, 792), (763, 814))
-                    measurement.add_measurement((761, 792), (763, 814))
-                    measurement.add_measurement((761, 792), (763, 814))
-                    measurement.add_measurement((761, 792), (763, 814))
-                    measurement.add_measurement((761, 792), (763, 814))
-                    input("Press Enter to write result...")
-                    self.writeResult(knots, center, measurement, cube, side_id)
-                    input("Press Enter to continue to next cube...")
-                    continue
+            '''
+            show pictures of selected cubes
+            '''
 
-                #https://www.life2coding.com/resize-opencv-window-according-screen-resolution/
-                img = cv.imread(image)
-            
-                #define the screen resulation
-                screen_res = Constants.IMG_HEIGHT, Constants.IMG_WIDTH
-                scale_width = screen_res[0] / img.shape[1]
-                scale_height = screen_res[1] / img.shape[0]
-                scale = min(scale_width, scale_height)
-            
-                #resized window width and height
-                window_width = int(img.shape[1] * scale)
-                window_height = int(img.shape[0] * scale)
-            
-                title = cube.details() + " side: " + side_id
-                #cv2.WINDOW_NORMAL makes the output window resizealbe
-                cv.namedWindow(title, cv.WINDOW_NORMAL)
-            
-                #resize the window according to the screen resolution
-                cv.resizeWindow(title, window_width, window_height)
+            for cube in cubes_selection:
+                for [image, side_id] in zip(cube.view.side, cube.view.side_id):
 
-                #detect mouse click https://stackoverflow.com/questions/28327020/opencv-detect-mouse-position-clicking-over-a-picture
-                #hand another parameter to callback function: https://stackoverflow.com/questions/47114360/what-should-be-the-arguments-of-cv2-setmousecallback
-                #cv.setMouseCallback(title, DrawOps.draw_line, [img, title])
-                cv.imshow(title ,img)
-                #detect if window is closed https://medium.com/@mh_yip/opencv-detect-whether-a-window-is-closed-or-close-by-press-x-button-ee51616f7088
-                while cv.getWindowProperty(title, cv.WND_PROP_VISIBLE) >= 1:
-                    k = cv.waitKey(20) & 0xFF
-                    if k == 27:
-                        cv.destroyAllWindows()
-                        break
-                    elif k == ord('k'):
-                        print("drawing knots")
+                    # TODO: delete
+                    if args["json"]:
                         knots = [Knot(), Knot()]
                         center = []
-                        cv.setMouseCallback(title, DrawOps.draw_knot, [title, img, knots, center])
-                    elif k == ord('m'):
-                        print("measuring thickness")
                         measurement = Measurement()
-                        measurement_spots = []
-                        #add 10%, 50% and 90% measurement spots
-                        measurement_spots.append([int(center[0][0] - 0.1 * (center[0][0] - center[1][0])),int(center[0][1] - 0.1 * (center[0][1] - center[1][1]))])
-                        measurement_spots.append([int(center[0][0] - 0.5 * (center[0][0] - center[1][0])),int(center[0][1] - 0.5 * (center[0][1] - center[1][1]))])
-                        measurement_spots.append([int(center[0][0] - 0.9 * (center[0][0] - center[1][0])),int(center[0][1] - 0.9 * (center[0][1] - center[1][1]))])
-
-                        #backup img
-                        img_bk = copy.deepcopy(img)
-                        cv.setMouseCallback(title, DrawOps.measurement, [title, img, measurement, center, measurement_spots, img_bk])
-                    elif k == ord('s'):
-                        #show and save
-                        img = cv.imread(image)
-                        DrawOps.show(img, title, measurement, knots, center)
-                        #save
+                        # fake knots
+                        # "knot1": "[[710, 769], [697, 805], [739, 801]]", "knot2": "[[777, 803], [804, 780], [798, 827]]"
+                        knots[0].addPoint(710, 769)
+                        knots[0].addPoint(697, 805)
+                        knots[0].addPoint(739, 801)
+                        knots[1].addPoint(777, 803)
+                        knots[1].addPoint(804, 780)
+                        knots[1].addPoint(798, 827)
+                        # fake center
+                        center1 = ((knots[0].coordinates[0][0]+knots[0].coordinates[1][0]+knots[0].coordinates[2][0])//3, (knots[0].coordinates[0][1]+knots[0].coordinates[1][1]+knots[0].coordinates[2][1])//3) 
+                        center.append(center1)
+                        center2 = ((knots[1].coordinates[0][0]+knots[1].coordinates[1][0]+knots[1].coordinates[2][0])//3, (knots[1].coordinates[0][1]+knots[1].coordinates[1][1]+knots[1].coordinates[2][1])//3) 
+                        center.append(center2)
+                        
+                        # fake measurement
+                        # "measurement10_1": "[(761, 792), (763, 814)]", "measurement10_2": "[(761, 792), (759, 775)]", "measurement50_1": "[(801, 791), (801, 807)]", "measurement50_2": "[(801, 791), (800, 775)]", "measurement90_1": "[(841, 789), (841, 808)]", "measurement90_2": "[(841, 789), (839, 757)]"
+                        measurement.add_measurement((761, 792), (763, 814))
+                        measurement.add_measurement((761, 792), (763, 814))
+                        measurement.add_measurement((761, 792), (763, 814))
+                        measurement.add_measurement((761, 792), (763, 814))
+                        measurement.add_measurement((761, 792), (763, 814))
+                        measurement.add_measurement((761, 792), (763, 814))
+                        input("Press Enter to write result...")
                         self.writeResult(knots, center, measurement, cube, side_id)
-                    elif k == ord('n'):
-                        cv.destroyAllWindows()
-                        break
+                        input("Press Enter to continue to next cube...")
+                        continue
+
+                    #https://www.life2coding.com/resize-opencv-window-according-screen-resolution/
+                    img = cv.imread(image)
+                
+                    #define the screen resulation
+                    screen_res = Constants.IMG_HEIGHT, Constants.IMG_WIDTH
+                    scale_width = screen_res[0] / img.shape[1]
+                    scale_height = screen_res[1] / img.shape[0]
+                    scale = min(scale_width, scale_height)
+                
+                    #resized window width and height
+                    window_width = int(img.shape[1] * scale)
+                    window_height = int(img.shape[0] * scale)
+                
+                    title = cube.details() + " side: " + side_id
+                    #cv2.WINDOW_NORMAL makes the output window resizealbe
+                    cv.namedWindow(title, cv.WINDOW_NORMAL)
+                
+                    #resize the window according to the screen resolution
+                    cv.resizeWindow(title, window_width, window_height)
+
+                    #detect mouse click https://stackoverflow.com/questions/28327020/opencv-detect-mouse-position-clicking-over-a-picture
+                    #hand another parameter to callback function: https://stackoverflow.com/questions/47114360/what-should-be-the-arguments-of-cv2-setmousecallback
+                    #cv.setMouseCallback(title, DrawOps.draw_line, [img, title])
+                    cv.imshow(title ,img)
+                    #detect if window is closed https://medium.com/@mh_yip/opencv-detect-whether-a-window-is-closed-or-close-by-press-x-button-ee51616f7088
+                    while cv.getWindowProperty(title, cv.WND_PROP_VISIBLE) >= 1:
+                        k = cv.waitKey(20) & 0xFF
+                        if k == 27:
+                            cv.destroyAllWindows()
+                            break
+                        elif k == ord('k'):
+                            print("drawing knots")
+                            knots = [Knot(), Knot()]
+                            center = []
+                            cv.setMouseCallback(title, DrawOps.draw_knot, [title, img, knots, center])
+                        elif k == ord('m'):
+                            print("measuring thickness")
+                            measurement = Measurement()
+                            measurement_spots = []
+                            #add 10%, 50% and 90% measurement spots
+                            measurement_spots.append([int(center[0][0] - 0.1 * (center[0][0] - center[1][0])),int(center[0][1] - 0.1 * (center[0][1] - center[1][1]))])
+                            measurement_spots.append([int(center[0][0] - 0.5 * (center[0][0] - center[1][0])),int(center[0][1] - 0.5 * (center[0][1] - center[1][1]))])
+                            measurement_spots.append([int(center[0][0] - 0.9 * (center[0][0] - center[1][0])),int(center[0][1] - 0.9 * (center[0][1] - center[1][1]))])
+
+                            #backup img
+                            img_bk = copy.deepcopy(img)
+                            cv.setMouseCallback(title, DrawOps.measurement, [title, img, measurement, center, measurement_spots, img_bk])
+                        elif k == ord('s'):
+                            #show and save
+                            img = cv.imread(image)
+                            DrawOps.show(img, title, measurement, knots, center)
+                            #save
+                            self.writeResult(knots, center, measurement, cube, side_id)
+                        elif k == ord('n'):
+                            cv.destroyAllWindows()
+                            break
 
 
 if __name__ == '__main__':
