@@ -253,8 +253,7 @@ class Foam_Label_Tool:
     def __init__(self):
         self.name = "cool label tool"
 
-    def writeResult(self, knots, center, measurement, cube):
-        print(cube.path)
+    def writeResult(self, knots, center, measurement, cube, side_id):
         data = {}
         data['measurement'] = []
         data['measurement'].append({
@@ -273,12 +272,13 @@ class Foam_Label_Tool:
             'px90' : str(measurement.getPx(4)+measurement.getPx(5)),
             'calculated_thickness' : str(measurement.getThickness())
         })
-        json_name = cube.path + ".json"
+        json_name = cube.path + "_" + side_id + ".json"
         if os.path.isfile(json_name):
             with open(json_name) as outfile:
                 old = json.load(outfile)
                 temp = old['measurement']
-                data['measurement'].append(temp)
+                for item in temp:
+                    data['measurement'].append(item)
         with open(json_name, 'w') as outfile:
             json.dump(data, outfile)
         
@@ -305,6 +305,10 @@ class Foam_Label_Tool:
         ap = argparse.ArgumentParser()
         ap.add_argument("-d", "--dataset", default="/home/jonaszagatta/gitprojects/datasets/foam/", help="path to input dataset (folder) with subfolders for all foam batches")
         ap.add_argument("-g", "--gamma", type=bool, default=False, help="do you want to use the gamma images?")
+        
+        # TODO: Delete
+        ap.add_argument("-j", "--json", type=bool, default=False, help="Do you only want to debug the json saving?")
+        
         args = vars(ap.parse_args())
 
         '''
@@ -422,6 +426,38 @@ class Foam_Label_Tool:
         for cube in cubes_selection:
             for [image, side_id] in zip(cube.view.side, cube.view.side_id):
 
+                # TODO: delete
+                if args["json"]:
+                    knots = [Knot(), Knot()]
+                    center = []
+                    measurement = Measurement()
+                    # fake knots
+                    # "knot1": "[[710, 769], [697, 805], [739, 801]]", "knot2": "[[777, 803], [804, 780], [798, 827]]"
+                    knots[0].addPoint(710, 769)
+                    knots[0].addPoint(697, 805)
+                    knots[0].addPoint(739, 801)
+                    knots[1].addPoint(777, 803)
+                    knots[1].addPoint(804, 780)
+                    knots[1].addPoint(798, 827)
+                    # fake center
+                    center1 = ((knots[0].coordinates[0][0]+knots[0].coordinates[1][0]+knots[0].coordinates[2][0])//3, (knots[0].coordinates[0][1]+knots[0].coordinates[1][1]+knots[0].coordinates[2][1])//3) 
+                    center.append(center1)
+                    center2 = ((knots[1].coordinates[0][0]+knots[1].coordinates[1][0]+knots[1].coordinates[2][0])//3, (knots[1].coordinates[0][1]+knots[1].coordinates[1][1]+knots[1].coordinates[2][1])//3) 
+                    center.append(center2)
+                    
+                    # fake measurement
+                    # "measurement10_1": "[(761, 792), (763, 814)]", "measurement10_2": "[(761, 792), (759, 775)]", "measurement50_1": "[(801, 791), (801, 807)]", "measurement50_2": "[(801, 791), (800, 775)]", "measurement90_1": "[(841, 789), (841, 808)]", "measurement90_2": "[(841, 789), (839, 757)]"
+                    measurement.add_measurement((761, 792), (763, 814))
+                    measurement.add_measurement((761, 792), (763, 814))
+                    measurement.add_measurement((761, 792), (763, 814))
+                    measurement.add_measurement((761, 792), (763, 814))
+                    measurement.add_measurement((761, 792), (763, 814))
+                    measurement.add_measurement((761, 792), (763, 814))
+                    input("Press Enter to write result...")
+                    self.writeResult(knots, center, measurement, cube)
+                    input("Press Enter to continue to next cube...")
+                    continue
+
                 #https://www.life2coding.com/resize-opencv-window-according-screen-resolution/
                 img = cv.imread(image)
             
@@ -474,7 +510,7 @@ class Foam_Label_Tool:
                         img = cv.imread(image)
                         DrawOps.show(img, title, measurement, knots, center)
                         #save
-                        self.writeResult(knots, center, measurement, cube)
+                        self.writeResult(knots, center, measurement, cube, side_id)
                     elif k == ord('n'):
                         cv.destroyAllWindows()
                         break
