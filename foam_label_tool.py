@@ -253,6 +253,12 @@ class Foam_Label_Tool:
     def __init__(self):
         self.name = "cool label tool"
 
+    def twoDigits(self, number):
+        if (len(str(number)) < 2):
+            return str("0" + str(number))
+        else:
+            return str(number)
+
     def writeResult(self, knots, center, measurement, cube, side_id):
         data = {}
         data['measurement'] = []
@@ -272,7 +278,7 @@ class Foam_Label_Tool:
             'px90' : str(measurement.getPx(4)+measurement.getPx(5)),
             'calculated_thickness' : str(measurement.getThickness())
         })
-        json_name = cube.path + "_" + side_id + ".json"
+        json_name = cube.path + "/image_" + self.twoDigits(cube.x) + "_" + self.twoDigits(cube.y) + "_" + side_id + ".json"
         if os.path.isfile(json_name):
             with open(json_name) as outfile:
                 old = json.load(outfile)
@@ -280,6 +286,7 @@ class Foam_Label_Tool:
                 for item in temp:
                     data['measurement'].append(item)
         with open(json_name, 'w') as outfile:
+            print("measurements in json: " + str(len(data['measurement'])))
             json.dump(data, outfile)
         
             
@@ -332,7 +339,7 @@ class Foam_Label_Tool:
         terminal_menu = TerminalMenu(foam_name)
         choice_index = terminal_menu.show()
         print(foam_dir[choice_index])
-
+        
         
         '''
         ppi and batch and reticulation are now fixed because of folder structure
@@ -375,6 +382,8 @@ class Foam_Label_Tool:
         #put images in cubes
         # https://stackoverflow.com/questions/1663807/how-to-iterate-through-two-lists-in-parallel
         for [name, path] in zip(image_name, image_path):
+            print("name: " + name)
+            print("path: " + path)
             splitstring = name.split(Constants.SEPARATOR)
             x = int(splitstring[1])
             y = int(splitstring[2])
@@ -391,7 +400,7 @@ class Foam_Label_Tool:
             if not found:
                 #cube doesnt exist
                 #cube_x, cube_y, cube_path, cube_batch, ppi, reticulated):
-                new_cube= Cube(x, y, path, batch, ppi, reticulated)
+                new_cube= Cube(x, y, foam_dir[choice_index], batch, ppi, reticulated)
                 cubes.append(new_cube)
             #once we're here cube does definitely exists -> add side to it
             new_cube.add_image_to_view(path, side)
@@ -454,7 +463,7 @@ class Foam_Label_Tool:
                     measurement.add_measurement((761, 792), (763, 814))
                     measurement.add_measurement((761, 792), (763, 814))
                     input("Press Enter to write result...")
-                    self.writeResult(knots, center, measurement, cube)
+                    self.writeResult(knots, center, measurement, cube, side_id)
                     input("Press Enter to continue to next cube...")
                     continue
 
