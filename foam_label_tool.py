@@ -16,12 +16,16 @@ from datetime import datetime
 def getPerpCoord(aX, aY, bX, bY, length):
     '''
     c and d will be placed perpendicular to b
+    (center[0][0], center[0][1], measurement_spots[spot_index][0], measurement_spots[spot_index][1], dist)
     '''
     vX = bX-aX
     vY = bY-aY
     #print(str(vX)+" "+str(vY))
+    '''
     if(vX == 0 or vY == 0):
+        print("center[0][0]: " + str(aX) + " center[0][1]: " +str(aY) + " measurement_spots[spot_index][0]: " +str(bX) + " measurement_spots[spot_index][1]: " +str(bY))
         return 0, 0, 0, 0
+    '''
     mag = math.sqrt(vX*vX + vY*vY)
     vX = vX / mag
     vY = vY / mag
@@ -69,30 +73,30 @@ class DrawOps:
 
     @staticmethod
     def draw_knot(event,x,y,flags,param):
-            if event == cv.EVENT_LBUTTONDBLCLK:
-                title = param[0]
-                img = param[1]
-                knots = param[2]
-                center = param[3]
-                if len(knots[0].coordinates) < 3:
-                    print("adding new point for knot1 - " + str(x) + ":" + str(y))
-                    knot = knots[0]
-                else:
-                    print("adding new point for knot2 - " + str(x) + ":" + str(y))
-                    knot = knots[1]
-                knot.addPoint(x, y)
-                if not len(knot.coordinates) < 3:
-                    cv.line(img, (knot.coordinates[0][0], knot.coordinates[0][1]), (knot.coordinates[1][0], knot.coordinates[1][1]), (0, 255, 0), thickness=Constants.LINE_THICKNESS_THIN)
-                    cv.line(img, (knot.coordinates[1][0], knot.coordinates[1][1]), (knot.coordinates[2][0], knot.coordinates[2][1]), (0, 255, 0), thickness=Constants.LINE_THICKNESS_THIN)
-                    cv.line(img, (knot.coordinates[2][0], knot.coordinates[2][1]), (knot.coordinates[0][0], knot.coordinates[0][1]), (0, 255, 0), thickness=Constants.LINE_THICKNESS_THIN)
-                if not len(knots[0].coordinates) < 3 and not len(knots[1].coordinates) < 3:
-                    print("both knots drawn")
-                    center1 = ((knots[0].coordinates[0][0]+knots[0].coordinates[1][0]+knots[0].coordinates[2][0])//3, (knots[0].coordinates[0][1]+knots[0].coordinates[1][1]+knots[0].coordinates[2][1])//3) 
-                    center.append(center1)
-                    center2 = ((knots[1].coordinates[0][0]+knots[1].coordinates[1][0]+knots[1].coordinates[2][0])//3, (knots[1].coordinates[0][1]+knots[1].coordinates[1][1]+knots[1].coordinates[2][1])//3) 
-                    center.append(center2)
-                    cv.line(img, (center[0][0], center[0][1]), (center[1][0], center[1][1]), (0, 255, 0), thickness=Constants.LINE_THICKNESS_THIN)
-                cv.imshow(title ,img)
+        if event == cv.EVENT_LBUTTONDBLCLK:
+            title = param[0]
+            img = param[1]
+            knots = param[2]
+            center = param[3]
+            if len(knots[0].coordinates) < 3:
+                print("adding new point for knot1 - " + str(x) + ":" + str(y))
+                knot = knots[0]
+            else:
+                print("adding new point for knot2 - " + str(x) + ":" + str(y))
+                knot = knots[1]
+            knot.addPoint(x, y)
+            if not len(knot.coordinates) < 3:
+                cv.line(img, (knot.coordinates[0][0], knot.coordinates[0][1]), (knot.coordinates[1][0], knot.coordinates[1][1]), (0, 255, 0), thickness=Constants.LINE_THICKNESS_THIN)
+                cv.line(img, (knot.coordinates[1][0], knot.coordinates[1][1]), (knot.coordinates[2][0], knot.coordinates[2][1]), (0, 255, 0), thickness=Constants.LINE_THICKNESS_THIN)
+                cv.line(img, (knot.coordinates[2][0], knot.coordinates[2][1]), (knot.coordinates[0][0], knot.coordinates[0][1]), (0, 255, 0), thickness=Constants.LINE_THICKNESS_THIN)
+            if not len(knots[0].coordinates) < 3 and not len(knots[1].coordinates) < 3:
+                print("both knots drawn")
+                center1 = ((knots[0].coordinates[0][0]+knots[0].coordinates[1][0]+knots[0].coordinates[2][0])//3, (knots[0].coordinates[0][1]+knots[0].coordinates[1][1]+knots[0].coordinates[2][1])//3) 
+                center.append(center1)
+                center2 = ((knots[1].coordinates[0][0]+knots[1].coordinates[1][0]+knots[1].coordinates[2][0])//3, (knots[1].coordinates[0][1]+knots[1].coordinates[1][1]+knots[1].coordinates[2][1])//3) 
+                center.append(center2)
+                cv.line(img, (center[0][0], center[0][1]), (center[1][0], center[1][1]), (0, 255, 0), thickness=Constants.LINE_THICKNESS_THIN)
+            cv.imshow(title ,img)
     
     @staticmethod
     def measurement(event,x,y,flags,param):
@@ -583,6 +587,35 @@ class Foam_Label_Tool:
                             DrawOps.show(img, title, measurement, knots, center)
                             #save
                             self.writeResult(knots, center, measurement, cube, side_id)
+                        elif k == ord('d'):
+                            print("debug")
+                            try:
+                                print("knot1: " + str(knots[0]))
+                            except:
+                                print("knot1 not defined")
+                            try:
+                                print("knot2: " + str(knots[1]))
+                            except:
+                                print("knot2 not defined")
+                            try:
+                                print("measurements: " + str(measurement))
+                            except:
+                                print("measurements not defined")
+                            try:
+                                print("center: " + str(center))
+                            except:
+                                print("center not defined")
+                            try:
+                                print("mouse: " + str(mouseX) + "," + str(mouseY))
+                            except:
+                                print("mosueX/Y not defined")
+                            '''
+                            print("knot1: " + str(knots[0]))
+                            print("knot2: " + str(knots[1]))
+                            print("measurements: " + str(measurement))
+                            print("center: " + str(center))
+                            print("mouse: " + str(mouseX) + "," + str(mouseY))
+                            '''
                         elif k == ord('n'):
                             cv.destroyAllWindows()
                             break
