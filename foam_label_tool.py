@@ -56,7 +56,7 @@ class Constants:
     JSON = ".json"
     PATH_SEPARATOR = "/"
     IMAGE_STR = "image_"
-    EXPORT_FIELDS = ['batch', 'x', 'y', 'reticulated', 'thickness']
+    EXPORT_FIELDS = ['batch', 'x', 'y', 'reticulated', 'thickness_1', 'thickness_2','thickness_3','thickness_4','thickness']
     RESULT_CSV = "result.csv"
 
 class DrawOps:
@@ -439,18 +439,27 @@ class Foam_Label_Tool:
             print("export")
             for cube in cubes:
                 #calculate thickness
-                thickness = 0.0
-                thickness_measurements = 0
-                for json_name in cube.view.side_json:
+                thickness = [0.0,0.0,0.0,0.0,0.0]
+                thickness_measurements = [0,0,0,0,0]
+                for (json_name, side_id) in zip(cube.view.side_json, cube.view.side_id):
                     if os.path.isfile(json_name):
                         with open(json_name) as outfile:
                             old = json.load(outfile)
                             temp = old['measurement']
                             for item in temp:
-                                thickness += float(item['calculated_thickness'])
-                                thickness_measurements += 1
-                if thickness_measurements > 0 and thickness > 0:
-                    final_thickness = thickness / thickness_measurements
+                                thickness[0] += float(item['calculated_thickness'])
+                                thickness[int(side_id)] += float(item['calculated_thickness'])
+                                thickness_measurements[0] += 1
+                                thickness_measurements[int(side_id)] += 1
+                if thickness_measurements[0] > 0 and thickness[0] > 0:
+                    final_thickness = [0.0, 0.0, 0.0, 0.0, 0.0]
+                    for i in range(0, 5):
+                        try:
+                            final_thickness[i] = thickness[i] / thickness_measurements[i]
+                        except:
+                            pass
+                    print(cube)
+                    print(final_thickness)
 
                     # datetime object containing current date and time
                     now = datetime.now()
@@ -466,7 +475,9 @@ class Foam_Label_Tool:
                         # ['batch', 'x', 'y', 'reticulated', 'thickness']
                         writer = csv.DictWriter(csv_file, fieldnames=Constants.EXPORT_FIELDS)
                         writer.writerow({Constants.EXPORT_FIELDS[0]: cube.batch, Constants.EXPORT_FIELDS[1]: str(cube.x),
-                            Constants.EXPORT_FIELDS[2]: str(cube.y), Constants.EXPORT_FIELDS[3]: cube.reticulated, Constants.EXPORT_FIELDS[4]: str(final_thickness)})
+                            Constants.EXPORT_FIELDS[2]: str(cube.y), Constants.EXPORT_FIELDS[3]: cube.reticulated, Constants.EXPORT_FIELDS[4]: str(final_thickness[1]),
+                            Constants.EXPORT_FIELDS[5]: str(final_thickness[2]), Constants.EXPORT_FIELDS[6]: str(final_thickness[3]), 
+                            Constants.EXPORT_FIELDS[7]: str(final_thickness[4]), Constants.EXPORT_FIELDS[8]: str(final_thickness[0])})
 
         
         else:
